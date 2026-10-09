@@ -113,6 +113,66 @@ def chat():
         return jsonify({"error": "Unexpected backend error."}), 500
 
 
+@app.post("/telegram/webhook")
+def telegram_webhook():
+    """Receive Telegram updates and forward text messages to the existing JARVIS chat API."""
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    if not bot_token:
+        return jsonify({"error": "TELEGRAM_BOT_TOKEN is not configured"}), 503
+
+    expected_secret = os.getenv("TELEGRAM_WEBHOOK_SECRET")
+    supplied_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+    if expected_secret and supplied_secret != expected_secret:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    update = request.get_json(silent=True) or {}
+    message = update.get("message") or update.get("edited_message") or {}
+    chat = message.get("chat") or {}
+    chat_id = chat.get("id")
+    text = message.get("text", "").strip()
+
+    if not chat_id or not text:
+        return jsonify({"ok": True})
+
+    # Basic commands
+    if text.startswith("/start"):
+        reply = "JARVIS online, Krishna. Mujhe message bhejo aur main jawab dunga. 🤖"
+    elif text.startswith("/help"):
+        reply = "Commands: /start, /help. Normal message bhejkar JARVIS se baat karo."
+    else:
+        try:
+            base_url = request.url_root.rstrip("/")
+            ai_response = requests.post(
+                base_url + "/chat",
+                json={"message": text},
+                timeout=45
+            )
+            data = ai_response.json() if ai_response.content else {}
+            if ai_response.ok and data.get("reply"):
+                reply = str(data["reply"])
+            else:
+                reply = "JARVIS AI abhi reply nahi kar pa raha. Thodi der baad try karo."
+                app.logger.error("Telegram chat forwarding failed: HTTP %s", ai_response.status_code)
+        except requests.RequestException:
+            app.logger.exception("Could not forward Telegram message to JARVIS chat")
+            reply = "JARVIS backend se connection fail hua. Please thodi der baad try karo."
+
+    try:
+        telegram_response = requests.post(
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            json={"chat_id": chat_id, "text": reply[:4000]},
+            timeout=15
+        )
+        if not telegram_response.ok:
+            app.logger.error("Telegram sendMessage failed: %s", telegram_response.text[:500])
+            return jsonify({"error": "Telegram could not send the reply"}), 502
+    except requests.RequestException:
+        app.logger.exception("Could not send Telegram reply")
+        return jsonify({"error": "Telegram API unavailable"}), 502
+
+    return jsonify({"ok": True})
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
     app.run(host="0.0.0.0", port=port)
