@@ -1,34 +1,36 @@
-# 🧠 JARVIS AI - Backend Proxy Server
+# JARVIS Krishna — Backend
 
-This repository contains the secure Python backend for the JARVIS Personal AI Assistant. It acts as a middleware proxy server to handle communication between the frontend client app and the Google Gemini AI, ensuring that secret API keys are never exposed to the public internet.
+Flask API for the JARVIS web interface and Telegram bot.
 
-## 🚀 Tech Stack
-* **Language:** Python 3
-* **Framework:** Flask (Web Server)
-* **AI Integration:** Google Gemini 1.5 Flash API
-* **Security:** Flask-CORS (Cross-Origin Resource Sharing)
-* **Deployment:** Render / Heroku
+## Endpoints
 
-## ⚙️ Core Features
-* **Secure Key Management:** Uses Environment Variables to protect API keys. No hardcoded secrets.
-* **CORS Enabled:** Fully configured to seamlessly accept voice-to-text requests from the frontend app.
-* **Lightweight & Fast:** Minimal dependencies for fast boot times and instant AI responses.
+- `GET /` — service status
+- `GET /health` — backend health and whether the Gemini key is configured
+- `POST /chat` — send `{"message":"Hello"}`, receive `{"reply":"..."}`
+- `POST /v1/chat/completions` — OpenAI-style compatibility route
+- `POST /telegram/webhook` — Telegram bot webhook
 
-## 📡 API Reference
+## Render environment variables
 
-### 1. Health Check
-* **Endpoint:** `/`
-* **Method:** `GET`
-* **Description:** Used to verify if the JARVIS core backend is online and running.
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | Yes for AI replies | Google AI Studio API key |
+| `GEMINI_MODEL` | No | Defaults to `gemini-2.5-flash` |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot only | Token from @BotFather |
+| `TELEGRAM_WEBHOOK_SECRET` | Recommended for Telegram | Validates webhook requests |
 
-### 2. Chat Completions
-* **Endpoint:** `/chat`
-* **Method:** `POST`
-* **Payload:** `{"message": "User's voice command text"}`
-* **Description:** Processes the user's prompt via the Gemini LLM and returns the intelligent response.
+Never put API keys or bot tokens in frontend HTML or commit them to GitHub.
 
-## 🔒 Security Note
-Do not hardcode the `GEMINI_API_KEY` in the source code. Always configure it in the Environment Variables of your hosting provider (like Render).
+## Connect Telegram
 
----
-*Developed by Krishna for the JARVIS AI Project.*
+After setting the Telegram environment variables and redeploying, set the webhook URL using Telegram's Bot API:
+
+`https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://YOUR-RENDER-SERVICE/telegram/webhook&secret_token=<WEBHOOK_SECRET>`
+
+Replace placeholders locally. Do not publish the completed URL because it contains the bot token.
+
+## Test
+
+Open `/health`. Expected response includes `"status":"ok"` and `"api_key_configured":true`. Then send a POST request to `/chat` with a JSON `message` field.
+
+Telegram currently supports text messages and text replies. Voice-note transcription and audio replies are not implemented yet.
